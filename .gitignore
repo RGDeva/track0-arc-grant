@@ -1,0 +1,11 @@
+node_modules/
+dist-mainnet-review/
+dist-mainnet-activation-review/
+dist-mainnet-release-candidate/
+contracts/out/
+contracts/cache/
+*.tsbuildinfo
+.env
+.env.*
+.vercel/
+.arc-studio/
