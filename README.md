@@ -37,8 +37,8 @@ the private decision record is intentionally excluded from this export.
 
 ## Publication boundary
 
-`vercel.json` is an offline configuration candidate. It disables automatic Git
-deployments and points at the grant-only release build. It does not confer
+`vercel.json` disables automatic Git deployments. Decision C proposes publishing
+only the locally verified static artifact, not rebuilding source remotely. It does not confer
 authorization to publish this repository, create a Vercel project, fund a
 wallet, use the grant-specific sender, or transact. Never add private keys or wallet
 recovery phrases to this repository or Vercel configuration.

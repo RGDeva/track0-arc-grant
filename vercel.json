@@ -1,7 +1,4 @@
 {
-  "framework": "vite",
-  "buildCommand": "npm run build:mainnet-release-candidate && npm run audit:mainnet-release-candidate",
-  "outputDirectory": "dist-mainnet-release-candidate",
   "git": {
     "deploymentEnabled": false
   }
