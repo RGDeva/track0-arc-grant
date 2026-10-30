@@ -22,7 +22,8 @@ function reader(overrides: Partial<GrantEvidenceReader> = {}): GrantEvidenceRead
 describe('persistent read-only Arc evidence', () => {
   it('accepts only exact transaction hashes from a URL', () => {
     expect(parseGrantTransactionHash(tx.hash)).toBe(tx.hash)
-    for (const bad of [null, '0x123', `${tx.hash}&other=1`]) expect(parseGrantTransactionHash(bad)).toBeNull()
+    for (const bad of [null, '0x123', `${tx.hash}&other=1`, `0x${'a'.repeat(512)}`, '%'.repeat(512)])
+      expect(parseGrantTransactionHash(bad)).toBeNull()
   })
   it('keeps the grant route, transaction and contract together on a fresh HTTPS origin', () => {
     const url = new URL(grantEvidenceUrl('https://demo.example', '/', tx.hash, terms.contract))

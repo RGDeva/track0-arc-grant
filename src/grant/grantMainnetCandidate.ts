@@ -2,8 +2,8 @@ import { encodeDeployData, encodeFunctionData, erc20Abi, getAddress, keccak256, 
 import { GRANT_CREATION_BYTECODE, grantConstructorAbi, matchesFrozenGrantRuntime } from './frozenGrantSplitArtifact'
 import { grantSplitAbi } from './grantSplitProtocol'
 
-/** Review-only Mainnet candidate. Not imported by the live grant wallet flow. */
-export const MAINNET_GRANT_WRITES_HARD_DISABLED = true as const
+/** B2 owner-exception candidate for local verification only; never publish without Decision C. */
+export const MAINNET_GRANT_WRITES_HARD_DISABLED = false as const
 export const MAINNET_GRANT_CHAIN_ID = 5042 as const
 export const MAINNET_GRANT_RPC = 'https://rpc.mainnet.arc.io' as const
 export const MAINNET_GRANT_USDC = '0x3600000000000000000000000000000000000000' as const
@@ -19,13 +19,18 @@ export const MAINNET_PROPOSED_ROLES = Object.freeze({
   artist: getAddress('0x3743716d3162a129AE4DCC7BCb49c2B8314D9EF9'),
   producer: getAddress('0x7106384E4f8430677cEb3CA43Cb5C50Cf615591a'),
 })
+export const MAINNET_PROPOSED_CEILINGS = {
+  deploy: { gasLimit: 510_000n, maxFeePerGas: 40_000_000_000n },
+  approve: { gasLimit: 71_000n, maxFeePerGas: 40_000_000_000n },
+  execute: { gasLimit: 205_000n, maxFeePerGas: 40_000_000_000n },
+} as const
 export const MAINNET_GRANT_IDENTITY = {
   payer: MAINNET_PROPOSED_ROLES.payer,
   recipientA: MAINNET_PROPOSED_ROLES.artist,
   recipientB: MAINNET_PROPOSED_ROLES.producer,
   demoId: MAINNET_PROPOSED_DEMO_ID,
   contract: null,
-  gasCeilings: null,
+  gasCeilings: MAINNET_PROPOSED_CEILINGS,
 } as const
 
 export type MainnetReviewBasis = {
@@ -35,16 +40,25 @@ export type MainnetReviewBasis = {
   deploymentDataSha256: Hex
 }
 
-/** Review and financial limits are intentionally absent; configuration approval does not fill them. */
+/** B1 preparation evidence only. B2 approval is deliberately absent. */
 export const MAINNET_GRANT_RELEASE = {
-  reviewBasis: null as MainnetReviewBasis | null,
-  ownerActivationReference: null,
-  payerControlReference: null,
-  ownerRoleConfirmationReference: null,
-  ceilings: null,
+  reviewBasis: {
+    kind: 'owner_demo_exception',
+    reference: 'release/MAINNET_OWNER_DECISION_A_2026-10-27.md#sha256:a8c30b0e81a4902bbcf5f8a5f5697b9da381f09173119ee93ef3fc734b05c815',
+    sourceCommit: '81dcc2bedce7fde5d365e5a04809f10745ffdf25',
+    deploymentDataSha256: '0xb1ff3f460f34f6832eea6393ef68413a6c1cd30d00ceba2d508e7d56b500a6b8',
+  } as const satisfies MainnetReviewBasis,
+  ownerActivationReference: 'release/MAINNET_OWNER_DECISION_B2_2026-10-30.md#sha256:3fb62ccc9ae3af596de9332a42615388ceedcfe0fe1ee7bc7567819c9261ab7c' as string | null,
+  payerControlReference: 'Decision A owner statement + documented read-only MetaMask payer/5042 check; revalidate at signing',
+  ownerRoleConfirmationReference: 'Decision A owner-controlled demo-wallet statement; not independent recipient control',
+  ceilings: MAINNET_PROPOSED_CEILINGS,
 } as const
 
-export function mainnetGrantWalletActionsEnabled(): false { return false }
+export function mainnetGrantWalletActionsEnabled(): boolean {
+  return !MAINNET_GRANT_WRITES_HARD_DISABLED && !!MAINNET_GRANT_RELEASE.ownerActivationReference &&
+    mainnetReviewBasisMatchesTerms(MAINNET_GRANT_RELEASE.reviewBasis, MAINNET_PROPOSED_ROLES.payer,
+      MAINNET_PROPOSED_ROLES.artist, MAINNET_PROPOSED_ROLES.producer, MAINNET_PROPOSED_DEMO_ID)
+}
 
 export type MainnetStep = 'deploy' | 'approve' | 'execute'
 export interface MainnetCeiling { gasLimit: bigint; maxFeePerGas: bigint }
@@ -144,10 +158,10 @@ export function assessMainnetReview(step: MainnetStep, facts: MainnetReviewFacts
   if (facts.quotedMaxFeePerGas === null || facts.priorityFeePerGas === null || !ceiling ||
       facts.quotedMaxFeePerGas > ceiling.maxFeePerGas || facts.priorityFeePerGas > ceiling.maxFeePerGas)
     findings.push('Live EIP-1559 fee quote unavailable or exceeds ceiling')
-  // Identity is intentionally UNSET until the owner confirms wallet control, recipient consent and demo ID.
+  // Grant-specific release readiness and live transaction-specific review remain mandatory.
   if (!releaseAuthorized) {
-    findings.push('Mainnet role consent, demo ID and independent review are not yet approved')
-    findings.push('Mainnet wallet writes are hard-disabled in source')
+    findings.push('Grant-specific release readiness and transaction-specific authorization are not approved')
+    findings.push('Mainnet transaction submission remains blocked without release readiness')
   }
   const data = step === 'deploy' && payer ? mainnetDeploymentData(payer, MAINNET_PROPOSED_ROLES.artist, MAINNET_PROPOSED_ROLES.producer, demoId)
     : mainnetCalldata(step, contract)

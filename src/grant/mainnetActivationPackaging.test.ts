@@ -5,20 +5,24 @@ import { WRITES_HARD_DISABLED } from '../lib/writeGates'
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
-it('keeps both shipped review builds unable to submit Mainnet transactions', () => {
+it('binds the local B2 owner exception while preserving the public disabled build and Track0 global gate', () => {
   const publicConfig = source('../../vite.mainnet.config.ts')
-  const privateConfig = source('../../vite.mainnet.activation-review.config.ts')
+  const releaseConfig = source('../../vite.mainnet.release-candidate.config.ts')
   const entry = source('../../mainnet-app/main.tsx')
+  const sealedDecisionHash = '3fb62ccc9ae3af596de9332a42615388ceedcfe0fe1ee7bc7567819c9261ab7c'
 
   expect(WRITES_HARD_DISABLED).toBe(true)
-  expect(MAINNET_GRANT_WRITES_HARD_DISABLED).toBe(true)
-  expect(Object.values(MAINNET_GRANT_RELEASE).every((value) => value === null)).toBe(true)
-  expect(MAINNET_GRANT_IDENTITY).toMatchObject({ contract: null, gasCeilings: null })
+  expect(MAINNET_GRANT_WRITES_HARD_DISABLED).toBe(false)
+  expect(MAINNET_GRANT_RELEASE.ownerActivationReference).toBe(`release/MAINNET_OWNER_DECISION_B2_2026-10-30.md#sha256:${sealedDecisionHash}`)
+  expect(MAINNET_GRANT_RELEASE.ceilings).not.toBeNull()
+  expect(MAINNET_GRANT_IDENTITY).toMatchObject({ contract: null })
   expect(publicConfig).toContain('mainnetSender.disabled.ts')
   expect(publicConfig).toContain('useMainnetWalletPort.disabled.ts')
-  expect(privateConfig).not.toContain('mainnetSender.disabled.ts')
-  expect(privateConfig).not.toContain('useMainnetWalletPort.disabled.ts')
-  expect(privateConfig).toContain('treeshake: false')
+  expect(releaseConfig).not.toContain('mainnetSender.disabled.ts')
+  expect(releaseConfig).not.toContain('useMainnetWalletPort.disabled.ts')
+  expect(releaseConfig).toContain('treeshake: false')
   expect(entry).toContain('disabled={MAINNET_GRANT_WRITES_HARD_DISABLED || review.findings.length > 0}')
   expect(entry).toContain('disabled={MAINNET_GRANT_WRITES_HARD_DISABLED || submitting')
+  expect(entry).toContain('disabled={!releaseReady || (!address && (!metaMask || isPending))}')
+  expect(entry).toContain('disabled={!releaseReady} onClick={() => { setSubmissionReview(null); switchChain')
 })

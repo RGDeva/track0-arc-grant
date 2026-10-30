@@ -53,7 +53,7 @@ function fixture(step: 'approve' | 'execute') {
     quotedMaxFeePerGas: 29_000_000_000n, priorityFeePerGas: 5_000_000_000n,
     contract, runtimeCode: GRANT_RUNTIME_TEMPLATE, reviewedRuntimeHash: journal.runtimeHash!,
     contractTermsMatch: true, executed: false, priorAttemptUnresolved: false,
-    ceilings: MAINNET_GRANT_RELEASE.ceilings as unknown as MainnetReviewFacts['ceilings'] }
+    ceilings: MAINNET_GRANT_RELEASE.ceilings }
   const request = prepareMainnetRequest(step, terms, journal, facts.ceilings[step]!, facts.priorityFeePerGas!)
   const body = { step, terms, facts, request, nonce: 1, aggregateMaximum: 331_440_000_000_000_000n }
   const review: MainnetSubmissionReview = { ...body, fingerprint: mainnetReviewFingerprint(body) }

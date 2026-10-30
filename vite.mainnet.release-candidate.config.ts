@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-/** Local release-candidate build only. Real sender is included; source write gates remain disabled. */
+/** Local B2 activation build only. Real sender is included; never deploy without Decision C. */
 export default defineConfig({
   root: path.resolve(__dirname, 'mainnet-app'),
   plugins: [react()],

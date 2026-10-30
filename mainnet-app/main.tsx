@@ -227,7 +227,7 @@ function App() {
       <p className="text-xs font-semibold uppercase tracking-widest">Track0 × Arc · Mainnet release candidate</p>
       <h1 className="display mt-3 text-3xl font-bold">A payment you can review before it exists.</h1>
       <p className="mt-3 text-sm">Proposed operator-funded split: artist 0.10 USDC, producer 0.20 USDC. No Mainnet contract or payment has been confirmed. This is not a royalty settlement.</p>
-      <div className="grant-hero-facts mt-5 flex flex-wrap gap-2 text-xs"><span>Arc Mainnet · 5042</span><span>0.30 USDC proposed</span><span>Wallet writes hard-disabled</span></div>
+      <div className="grant-hero-facts mt-5 flex flex-wrap gap-2 text-xs"><span>Arc Mainnet · 5042</span><span>0.30 USDC proposed</span><span>{releaseReady ? 'Owner activation recorded' : 'Transaction submission blocked pending B2 approval'}</span></div>
     </header>
     <section className="mt-6 rounded-2xl p-5" style={{ background: 'var(--surface)' }}>
       <h2 className="font-semibold">1. Public, pinned payment terms</h2>
@@ -240,8 +240,8 @@ function App() {
     </section>
     <section className="mt-5 rounded-2xl p-5" style={{ background: 'var(--surface)' }}>
       <h2 className="font-semibold">2. Connect the proposed payer for read-only review</h2>
-      <button className="mt-3 rounded-xl border px-3 py-2 text-xs" disabled={!address && (!metaMask || isPending)} onClick={() => { setSubmissionReview(null); if (address) disconnect(); else if (metaMask) connect({ connector: metaMask }) }}>{address ? 'Disconnect wallet' : 'Connect MetaMask'}</button>
-      {address && chainId !== MAINNET_GRANT_CHAIN_ID && <button className="ml-2 rounded-xl border px-3 py-2 text-xs" onClick={() => { setSubmissionReview(null); switchChain({ chainId: MAINNET_GRANT_CHAIN_ID }) }}>Request Arc Mainnet switch</button>}
+      <button className="mt-3 rounded-xl border px-3 py-2 text-xs" disabled={!releaseReady || (!address && (!metaMask || isPending))} onClick={() => { setSubmissionReview(null); if (address) disconnect(); else if (metaMask) connect({ connector: metaMask }) }}>{address ? 'Disconnect wallet' : 'Connect MetaMask'}</button>
+      {address && chainId !== MAINNET_GRANT_CHAIN_ID && <button className="ml-2 rounded-xl border px-3 py-2 text-xs" disabled={!releaseReady} onClick={() => { setSubmissionReview(null); switchChain({ chainId: MAINNET_GRANT_CHAIN_ID }) }}>Request Arc Mainnet switch</button>}
       {connectionError && <p role="alert" className="mt-2 text-xs">Wallet connection was not completed. No financial request was made.</p>}
       <p className="mono mt-2 break-all text-xs">Connected {address ?? 'UNSET'} · wallet chain {chainId ?? 'UNSET'} · RPC chain {facts.chainId ?? 'UNVERIFIED'}</p>
       <p className="mt-1 text-xs">USDC balance {facts.tokenBalance == null ? 'UNVERIFIED' : formatUnits(facts.tokenBalance, 6)}. Native gas accounting uses 18 decimals for this same asset; the gas-unit read is {facts.nativeBalance == null ? 'UNVERIFIED' : formatUnits(facts.nativeBalance, 18)} USDC, not additional funds.</p>
@@ -256,7 +256,7 @@ function App() {
       <div className="mt-3 flex flex-wrap gap-2">{steps.map((item) => <button key={item} className="rounded-xl border px-3 py-2 text-xs" aria-pressed={item === step} onClick={() => { setSubmissionReview(null); setStep(item) }}>{item}</button>)}</div>
       <p className="mono mt-3 break-all text-xs">To {review.to ?? 'contract creation'} · value {review.value.toString()} · data SHA-256 {review.dataSha256 ?? 'UNSET'}</p>
       <p className="mono mt-1 break-all text-xs">{step === 'deploy' ? `Frozen creation-bytecode SHA-256 ${GRANT_CREATION_SHA256}` : `Exact calldata ${review.data ?? 'UNSET'}`}</p>
-      <p className="mt-2 text-xs">Live gas estimate {estimatedGas?.toString() ?? 'UNAVAILABLE'} · fee quote {facts.quotedMaxFeePerGas?.toString() ?? 'UNAVAILABLE'} wei/gas. Reviewed gas limit, max fee, aggregate spending and funding route: UNSET.</p>
+      <p className="mt-2 text-xs">Live gas estimate {estimatedGas?.toString() ?? 'UNAVAILABLE'} · fee quote {facts.quotedMaxFeePerGas?.toString() ?? 'UNAVAILABLE'} wei/gas. Proposed limits: deploy 510000, approve 71000, execute 205000 gas at 40 gwei; execution remains conditional on a post-deployment estimate. Funding route and transaction authorization: UNSET.</p>
       <p className="mt-1 text-xs">Current allowance {facts.allowance === undefined || facts.allowance === null ? 'UNVERIFIED' : formatUnits(facts.allowance, 6)} USDC · contract {reviewedContract ?? 'UNSET'}</p>
       {review.findings.map((finding) => <p key={finding} className="mt-1 text-xs" style={{ color: 'var(--danger)' }}>BLOCKED · {finding}</p>)}
       <button className="mt-3 rounded-xl border px-3 py-2 text-xs disabled:opacity-40" disabled={MAINNET_GRANT_WRITES_HARD_DISABLED || review.findings.length > 0} onClick={prepareSubmissionReview}>Prepare exact {step} wallet review</button>
@@ -269,8 +269,8 @@ function App() {
     <section className="mt-5 rounded-2xl p-5" style={{ background: 'var(--surface)' }}>
       <h2 className="font-semibold">Owner-controlled demo roles · not transaction authorization</h2>
       <p className="mt-2 text-xs">Payer wallet control: {address?.toLowerCase() === MAINNET_PROPOSED_ROLES.payer.toLowerCase() ? 'CONNECTED, NOT ATTESTED' : 'UNVERIFIED'} · both recipients: owner-reported demo accounts, not independently controlled or verified.</p>
-      <p className="mt-1 text-xs">Exact owner-confirmed preparation terms: 0.10 + 0.20 USDC and the Mainnet demo ID above. Maximum aggregate expenditure: UNSET until all three gas ceilings and funding costs are reviewed.</p>
-      <p className="mt-1 text-xs">This screen records no approval and requests no financial signature. The internal review requirement remains in force unless the owner explicitly accepts the limited self-review exception; every financial action still needs its own authorization.</p>
+      <p className="mt-1 text-xs">Exact owner-confirmed preparation terms: 0.10 + 0.20 USDC and the Mainnet demo ID above. Proposed conditional aggregate ceiling: 0.33144 USDC, including 0.30 USDC transfers; this is not approved spending.</p>
+      <p className="mt-1 text-xs">Decisions A and B2 record a limited owner risk exception, not an independent audit. This is a local activation candidate; publication, funding, deployment, approval and execution remain separate decisions.</p>
     </section>
     {queryContract && !publicCandidate &&
       <p className="mt-5 text-xs">URL-supplied contract is not verified against frozen Mainnet runtime and terms; no payment is confirmed.</p>}
@@ -283,7 +283,7 @@ function App() {
         <h2 className="font-semibold">Mainnet evidence · UNCONFIRMED</h2>
         <p className="mt-2 text-xs">No reviewed Mainnet contract and runtime identity exists. A URL, wallet, or cached screenshot cannot establish a payment.</p>
       </section>}
-    <p className="mt-6 text-xs">UNKNOWN outcomes require reconciliation of the original hash and nonce. This build has no Mainnet transaction submission path.</p>
+    <p className="mt-6 text-xs">UNKNOWN outcomes require reconciliation of the original hash and nonce. This local B2 artifact must not be published or connected to a signing wallet without separate authorization. No transaction is authorized by the owner risk exception.</p>
   </main>
 }
 

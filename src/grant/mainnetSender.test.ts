@@ -35,7 +35,7 @@ function fixture() {
     allowance: null, latestNonce: 0, pendingNonce: 0, estimatedGas: 400_000n,
     quotedMaxFeePerGas: 29_000_000_000n, priorityFeePerGas: 5_000_000_000n,
     contract: null, runtimeCode: null, reviewedRuntimeHash: null, contractTermsMatch: false, executed: null,
-    priorAttemptUnresolved: false, ceilings: MAINNET_GRANT_RELEASE.ceilings as unknown as MainnetReviewFacts['ceilings'] }
+    priorAttemptUnresolved: false, ceilings: MAINNET_GRANT_RELEASE.ceilings }
   const request = prepareMainnetRequest('deploy', terms, null, facts.ceilings.deploy!, facts.priorityFeePerGas!)
   const body = { step: 'deploy' as const, terms, facts, request, nonce: 0, aggregateMaximum: 331_440_000_000_000_000n }
   const review: MainnetSubmissionReview = { ...body, fingerprint: mainnetReviewFingerprint(body) }

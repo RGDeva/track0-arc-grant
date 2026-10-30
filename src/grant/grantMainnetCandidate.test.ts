@@ -6,16 +6,19 @@ import { grantConstructorAbi } from './frozenGrantSplitArtifact'
 import { assessMainnetReview, mainnetAttemptBlocked, mainnetCalldata, mainnetDeploymentData, mainnetMaximumExposure,
   mainnetReviewKey, mainnetReviewBasisMatchesTerms, MAINNET_GRANT_CHAIN_ID, MAINNET_GRANT_IDENTITY, MAINNET_GRANT_RELEASE,
   MAINNET_GRANT_WRITES_HARD_DISABLED, MAINNET_PROPOSED_DEMO_ID, MAINNET_PROPOSED_ROLES,
-  MAINNET_REVIEW_NAMESPACE, mainnetGrantWalletActionsEnabled, type MainnetReviewFacts } from './grantMainnetCandidate'
+  MAINNET_REVIEW_NAMESPACE, MAINNET_PROPOSED_CEILINGS, mainnetGrantWalletActionsEnabled, type MainnetReviewFacts } from './grantMainnetCandidate'
 
 describe('separate default-deny Mainnet candidate', () => {
-  it('binds owner-confirmed demo terms but has no review, deployment or fee approval', () => {
-    expect(MAINNET_GRANT_WRITES_HARD_DISABLED).toBe(true)
+  it('binds the B2 owner-exception reference to the frozen terms and ceilings', () => {
+    expect(MAINNET_GRANT_WRITES_HARD_DISABLED).toBe(false)
     expect(MAINNET_GRANT_IDENTITY).toMatchObject({ payer: MAINNET_PROPOSED_ROLES.payer,
       recipientA: MAINNET_PROPOSED_ROLES.artist, recipientB: MAINNET_PROPOSED_ROLES.producer,
-      demoId: MAINNET_PROPOSED_DEMO_ID, contract: null, gasCeilings: null })
-    expect(Object.values(MAINNET_GRANT_RELEASE).every((value) => value === null)).toBe(true)
-    expect(mainnetGrantWalletActionsEnabled()).toBe(false)
+      demoId: MAINNET_PROPOSED_DEMO_ID, contract: null, gasCeilings: MAINNET_PROPOSED_CEILINGS })
+    expect(MAINNET_GRANT_RELEASE.reviewBasis.kind).toBe('owner_demo_exception')
+    expect(MAINNET_GRANT_RELEASE.ownerActivationReference).toMatch(/^release\/MAINNET_OWNER_DECISION_B2_2026-10-30\.md#sha256:[0-9a-f]{64}$/)
+    expect(MAINNET_GRANT_RELEASE.ceilings).toEqual(MAINNET_PROPOSED_CEILINGS)
+    expect(mainnetMaximumExposure(MAINNET_PROPOSED_CEILINGS)).toBe(331_440_000_000_000_000n)
+    expect(mainnetGrantWalletActionsEnabled()).toBe(true)
   })
   it('rejects an unrecorded or mis-scoped owner-review exception', () => {
     const { payer, artist, producer } = MAINNET_PROPOSED_ROLES
@@ -70,7 +73,7 @@ describe('separate default-deny Mainnet candidate', () => {
     }
     const review = assessMainnetReview('deploy', facts)
     expect(review.findings.join(' ')).toMatch(/Wrong chain.*pending transaction.*unresolved/)
-    expect(review.findings).toContain('Mainnet wallet writes are hard-disabled in source')
+    expect(review.findings).toContain('Mainnet transaction submission remains blocked without release readiness')
     expect(review.to).toBeNull()
     expect(review.value).toBe(0n)
     expect(review.dataSha256).toBe(sha256(mainnetDeploymentData(facts.payer!, MAINNET_PROPOSED_ROLES.artist, MAINNET_PROPOSED_ROLES.producer, MAINNET_PROPOSED_DEMO_ID)))

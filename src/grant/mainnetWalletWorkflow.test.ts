@@ -47,7 +47,7 @@ describe('fail-closed Mainnet wallet candidate', () => {
     const execution = prepareMainnetRequest('execute', terms, { ...verified(), approve: { state: 'confirmed', hash: h('b'), at: 2, history: [] } }, caps, 1_000_000_000n)
     expect(execution.to).toBe(contract)
     expect(execution.data).toBe('0x61461954')
-    expect(() => assertMainnetSubmissionDisabled()).toThrow('hard-disabled')
+    expect(() => assertMainnetSubmissionDisabled()).toThrow('Unreviewed Mainnet activation state')
   })
   it('rejects wrong identities, unlimited fees, unverified contracts and repeats', () => {
     expect(validateMainnetTerms({ ...terms, artist: terms.payer })).not.toEqual([])

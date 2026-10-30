@@ -20,5 +20,6 @@ if (!config.includes('mainnetSender.disabled.ts') || !config.includes('useMainne
 if (!entry.includes('MAINNET_GRANT_WRITES_HARD_DISABLED') ||
     !entry.includes('disabled={MAINNET_GRANT_WRITES_HARD_DISABLED || submitting'))
   throw new Error('Mainnet review control is not visibly hard-disabled')
-if (!bundle.includes('Mainnet wallet writes are hard-disabled in source')) throw new Error('Mainnet hard-disable assertion was not built')
+if (!bundle.includes('Owner activation recorded') || bundle.includes('sendTransaction'))
+  throw new Error('Public Mainnet review build lacks owner-exception status or contains a sender')
 console.log(`Mainnet review bundle scan PASS (${assets.length} JavaScript assets; no app wallet-write handlers or known secret names)`)
