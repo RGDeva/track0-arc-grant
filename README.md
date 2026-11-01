@@ -34,4 +34,4 @@ the private decision record is intentionally excluded from this export.
 
 ## Publication boundary
 
-`vercel.json` disables automatic Git deployments. The public Vercel app was published from a reviewed static build, separately from this source export. Do not place private keys, recovery phrases, wallet journals, or internal Track0 data in this repository or Vercel configuration. This source export is not yet a published public GitHub repository.
+`vercel.json` disables automatic Git deployments. The public Vercel app was published from a reviewed static build, separately from this public source repository. Do not place private keys, recovery phrases, wallet journals, or internal Track0 data in this repository or Vercel configuration.
