@@ -68,7 +68,7 @@ describe('separate default-deny Mainnet candidate', () => {
       chainId: 5042002, walletChainId: 5042002, payer: MAINNET_PROPOSED_ROLES.payer, demoId: MAINNET_PROPOSED_DEMO_ID,
       tokenDecimals: 6, tokenBalance: 1_000_000n, nativeBalance: 10n ** 18n, allowance: 0n,
       latestNonce: 1, pendingNonce: 2, estimatedGas: 400_000n, quotedMaxFeePerGas: 40_000_000_000n,
-      priorityFeePerGas: 4_000_000_000n, contract: null, runtimeCode: null, contractTermsMatch: false,
+      baseFeePerGas: 20_000_000_000n, priorityFeePerGas: 4_000_000_000n, contract: null, runtimeCode: null, contractTermsMatch: false,
       reviewedRuntimeHash: null, executed: null, priorAttemptUnresolved: true, ceilings: { deploy: null, approve: null, execute: null },
     }
     const review = assessMainnetReview('deploy', facts)
@@ -87,7 +87,7 @@ describe('separate default-deny Mainnet candidate', () => {
       chainId: 5042, walletChainId: 5042002, payer: MAINNET_PROPOSED_ROLES.payer, demoId: MAINNET_PROPOSED_DEMO_ID,
       tokenDecimals: 6, tokenBalance: 100_000n, nativeBalance: 100_000_000_000_000_000n,
       allowance: 299_999n, latestNonce: 0, pendingNonce: 0, estimatedGas: 210_000n,
-      quotedMaxFeePerGas: 41_000_000_000n, priorityFeePerGas: 4_000_000_000n,
+      quotedMaxFeePerGas: 41_000_000_000n, baseFeePerGas: 39_000_000_000n, priorityFeePerGas: 4_000_000_000n,
       contract: MAINNET_PROPOSED_ROLES.artist, runtimeCode: null, reviewedRuntimeHash: null, contractTermsMatch: false,
       executed: true, priorAttemptUnresolved: false, ceilings: caps,
     }
@@ -96,7 +96,7 @@ describe('separate default-deny Mainnet candidate', () => {
     expect(findings).toMatch(/already|executed/)
     expect(findings).toMatch(/exactly 300000/)
     expect(findings).toMatch(/estimate unavailable or exceeds ceiling|exceeds ceiling/)
-    expect(findings).toMatch(/fee quote unavailable or exceeds ceiling/)
+    expect(findings).toMatch(/base fee plus capped priority fee unavailable or exceeds ceiling/)
     expect(findings).toMatch(/wallet is not on Arc Mainnet/)
   })
 })

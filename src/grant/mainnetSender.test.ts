@@ -33,7 +33,7 @@ function fixture() {
   const facts: MainnetReviewFacts = { chainId: 5042, walletChainId: 5042, payer: terms.payer, demoId: terms.demoId,
     tokenDecimals: 6, tokenBalance: 2_000_000n, nativeBalance: 2_000_000_000_000_000_000n,
     allowance: null, latestNonce: 0, pendingNonce: 0, estimatedGas: 400_000n,
-    quotedMaxFeePerGas: 29_000_000_000n, priorityFeePerGas: 5_000_000_000n,
+    quotedMaxFeePerGas: 29_000_000_000n, baseFeePerGas: 20_000_000_000n, priorityFeePerGas: 5_000_000_000n,
     contract: null, runtimeCode: null, reviewedRuntimeHash: null, contractTermsMatch: false, executed: null,
     priorAttemptUnresolved: false, ceilings: MAINNET_GRANT_RELEASE.ceilings }
   const request = prepareMainnetRequest('deploy', terms, null, facts.ceilings.deploy!, facts.priorityFeePerGas!)
@@ -44,6 +44,7 @@ function fixture() {
     functionName === 'decimals' ? 6 : 2_000_000n,
     getBalance: async () => 2_000_000_000_000_000_000n,
     getTransactionCount: async () => 0, estimateFeesPerGas: async () => ({ maxFeePerGas: 29_000_000_000n, maxPriorityFeePerGas: 5_000_000_000n }),
+    getBlock: async () => ({ baseFeePerGas: 20_000_000_000n }),
     estimateGas: async ({ data }: { data: Hex }) => data === mainnetDeploymentData(terms.payer, terms.artist, terms.producer, terms.demoId) ? 400_000n : 999_999n,
     getTransaction: async () => null, getTransactionReceipt: async () => null } as unknown as PublicClient
   const wallet = { providerId: 'io.metamask', getAddresses: async () => [terms.payer] as Address[],
@@ -54,6 +55,19 @@ function fixture() {
 }
 
 describe('Mainnet sender with mock-only release record', () => {
+  it('caps a 6.325-gwei recommendation at 6 gwei before the wallet request', async () => {
+    const sample = fixture()
+    sample.ports.client = { ...sample.client,
+      estimateFeesPerGas: async () => ({ maxFeePerGas: 29_000_000_000n, maxPriorityFeePerGas: 6_325_000_000n }),
+    } as unknown as PublicClient
+    sample.review.facts = { ...sample.review.facts, priorityFeePerGas: 6_325_000_000n }
+    sample.review.request = prepareMainnetRequest('deploy', terms, null, sample.review.facts.ceilings.deploy!, 6_000_000_000n)
+    const { fingerprint: _oldFingerprint, ...reviewBody } = sample.review
+    sample.review.fingerprint = mainnetReviewFingerprint(reviewBody)
+    await submitReviewedMainnetStep(sample.ports, sample.review)
+    expect(sample.send).toHaveBeenCalledOnce()
+    expect(sample.send.mock.calls[0][0].maxPriorityFeePerGas).toBe(6_000_000_000n)
+  })
   it('submits only the exact reviewed creation request on an explicit call and preserves UNKNOWN', async () => {
     const { ports, review, send, storage } = fixture()
     expect(send).not.toHaveBeenCalled()
@@ -74,6 +88,12 @@ describe('Mainnet sender with mock-only release record', () => {
       (sample) => { sample.ports.client = { ...sample.client, getTransactionCount: async () => 1 } },
       (sample) => { sample.review.request = { ...sample.review.request, data: '0x1234' } },
       (sample) => { sample.ports.client = { ...sample.client, estimateGas: async () => 510_001n } },
+      (sample) => { sample.ports.client = { ...sample.client,
+        getBlock: async () => ({ baseFeePerGas: 39_000_000_000n }),
+        estimateFeesPerGas: async () => ({ maxFeePerGas: 45_000_000_000n, maxPriorityFeePerGas: 6_325_000_000n }) } as unknown as PublicClient },
+      (sample) => { sample.review.request = { ...sample.review.request, maxPriorityFeePerGas: 6_000_000_001n } },
+      (sample) => { sample.ports.client = { ...sample.client,
+        estimateFeesPerGas: async () => ({ maxFeePerGas: 5_000_000_000n, maxPriorityFeePerGas: 5_500_000_000n }) } as unknown as PublicClient },
       (sample) => { sample.ports.wallet.providerId = 'phantom' },
       (sample) => { let reads = 0; sample.ports.client = { ...sample.client,
         getTransactionCount: async () => ++reads > 2 ? 1 : 0 } },

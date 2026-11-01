@@ -9,6 +9,8 @@ export const MAINNET_GRANT_RPC = 'https://rpc.mainnet.arc.io' as const
 export const MAINNET_GRANT_USDC = '0x3600000000000000000000000000000000000000' as const
 export const MAINNET_GRANT_AMOUNTS = [100_000n, 200_000n] as const
 export const MAINNET_GRANT_TOTAL = 300_000n
+/** Decision E proposal only; a new transaction-specific approval is still required. */
+export const MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS = 6_000_000_000n
 /** Owner-confirmed for preparation only; not a transaction authorization. */
 export const MAINNET_PROPOSED_DEMO_ID = keccak256(toHex('track0-arc-grant-mainnet-2026-v1'))
 /** Never load the Testnet wallet journal under a Mainnet review identity. */
@@ -75,6 +77,7 @@ export interface MainnetReviewFacts {
   pendingNonce: number | null
   estimatedGas: bigint | null
   quotedMaxFeePerGas: bigint | null
+  baseFeePerGas: bigint | null
   priorityFeePerGas: bigint | null
   contract: Address | null
   runtimeCode: Hex | null
@@ -125,6 +128,12 @@ export function mainnetMaximumExposure(ceilings: Record<MainnetStep, MainnetCeil
     ceilings.execute.gasLimit * ceilings.execute.maxFeePerGas
 }
 
+/** A recommendation is not a minimum. Cap the requested tip without raising the reviewed ceiling. */
+export function mainnetRequestedPriorityFee(quoted: bigint): bigint {
+  if (quoted < 0n) throw new Error('Invalid negative priority-fee quote')
+  return quoted < MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS ? quoted : MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS
+}
+
 export function assessMainnetReview(step: MainnetStep, facts: MainnetReviewFacts, releaseAuthorized = false): {
   findings: string[]; to: Address | null; data: Hex | null; dataSha256: Hex | null; value: bigint;
   maximumExposure: bigint | null; maximumStageFee: bigint | null
@@ -155,9 +164,11 @@ export function assessMainnetReview(step: MainnetStep, facts: MainnetReviewFacts
   const ceiling = ceilings[step]
   if (!ceiling || ceiling.gasLimit <= 0n || ceiling.maxFeePerGas <= 0n) findings.push('Reviewed stage gas and fee ceilings are missing')
   if (facts.estimatedGas === null || !ceiling || facts.estimatedGas > ceiling.gasLimit) findings.push('Live gas estimate unavailable or exceeds ceiling')
-  if (facts.quotedMaxFeePerGas === null || facts.priorityFeePerGas === null || !ceiling ||
-      facts.quotedMaxFeePerGas > ceiling.maxFeePerGas || facts.priorityFeePerGas > ceiling.maxFeePerGas)
-    findings.push('Live EIP-1559 fee quote unavailable or exceeds ceiling')
+  if (facts.baseFeePerGas === null || facts.baseFeePerGas < 0n ||
+      facts.priorityFeePerGas === null || facts.priorityFeePerGas < 0n || !ceiling ||
+      (facts.baseFeePerGas !== null && facts.priorityFeePerGas !== null &&
+        facts.baseFeePerGas + mainnetRequestedPriorityFee(facts.priorityFeePerGas) > ceiling.maxFeePerGas))
+    findings.push('Live base fee plus capped priority fee unavailable or exceeds ceiling')
   // Grant-specific release readiness and live transaction-specific review remain mandatory.
   if (!releaseAuthorized) {
     findings.push('Grant-specific release readiness and transaction-specific authorization are not approved')

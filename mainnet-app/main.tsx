@@ -16,7 +16,7 @@ import { useMainnetWalletPort } from '../src/grant/useMainnetWalletPort'
 import { readMainnetPublicCandidate } from '../src/grant/mainnetPublicCandidate'
 import { assessMainnetReview, mainnetAttemptBlocked, MAINNET_GRANT_CHAIN_ID, MAINNET_GRANT_TOTAL, MAINNET_GRANT_USDC,
   MAINNET_PROPOSED_DEMO_ID, MAINNET_PROPOSED_ROLES, MAINNET_GRANT_WRITES_HARD_DISABLED, MAINNET_GRANT_RELEASE,
-  mainnetMaximumExposure,
+  mainnetMaximumExposure, MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS, mainnetRequestedPriorityFee,
   mainnetDeploymentData, mainnetReviewBasisMatchesTerms, type MainnetReviewFacts, type MainnetStep } from '../src/grant/grantMainnetCandidate'
 import '../src/index.css'
 
@@ -96,12 +96,13 @@ function App() {
     let active = true
     void (async () => {
       try {
-        const [rpcChain, decimals, tokenBalance, nativeBalance, latestNonce, pendingNonce, fee] = await Promise.all([
+        const [rpcChain, decimals, tokenBalance, nativeBalance, latestNonce, pendingNonce, fee, block] = await Promise.all([
           client.getChainId(), client.readContract({ address: MAINNET_GRANT_USDC, abi: erc20Abi, functionName: 'decimals' }),
           address ? client.readContract({ address: MAINNET_GRANT_USDC, abi: erc20Abi, functionName: 'balanceOf', args: [address] }) : Promise.resolve(null),
           address ? client.getBalance({ address }) : Promise.resolve(null),
           address ? client.getTransactionCount({ address, blockTag: 'latest' }) : Promise.resolve(null),
           address ? client.getTransactionCount({ address, blockTag: 'pending' }) : Promise.resolve(null), client.estimateFeesPerGas(),
+          client.getBlock({ blockTag: 'latest' }),
         ])
         let observedTerms: GrantSplitTerms | null = null
         let codeHash: Hex | null = null
@@ -130,6 +131,7 @@ function App() {
         setTerms(observedTerms); setRuntimeHash(codeHash)
         setFacts({ chainId: rpcChain, payer: address ?? null, demoId: MAINNET_PROPOSED_DEMO_ID, tokenDecimals: decimals,
           tokenBalance, nativeBalance, latestNonce, pendingNonce, quotedMaxFeePerGas: fee.maxFeePerGas ?? null,
+          baseFeePerGas: block.baseFeePerGas ?? null,
           priorityFeePerGas: fee.maxPriorityFeePerGas ?? null, contract: reviewedContract, runtimeCode: code,
           contractTermsMatch: !!observedTerms && validateGrantSplitTerms({ ...observedTerms, executed: false }, MAINNET_GRANT_CHAIN_ID, MAINNET_GRANT_USDC).length === 0 &&
             observedTerms.payer.toLowerCase() === MAINNET_PROPOSED_ROLES.payer.toLowerCase() &&
@@ -167,6 +169,7 @@ function App() {
     nativeBalance: facts.nativeBalance ?? null, allowance: facts.allowance ?? null,
     latestNonce: facts.latestNonce ?? null, pendingNonce: facts.pendingNonce ?? null,
     estimatedGas, quotedMaxFeePerGas: facts.quotedMaxFeePerGas ?? null,
+    baseFeePerGas: facts.baseFeePerGas ?? null,
     priorityFeePerGas: facts.priorityFeePerGas ?? null, contract: reviewedContract,
     runtimeCode: facts.runtimeCode ?? null, reviewedRuntimeHash, contractTermsMatch: facts.contractTermsMatch ?? false,
     executed: facts.executed ?? null,
@@ -192,7 +195,7 @@ function App() {
         throw new Error('Reviewed gas ceiling, nonce and fee quote are missing')
       const terms = { payer: MAINNET_PROPOSED_ROLES.payer, artist: MAINNET_PROPOSED_ROLES.artist,
         producer: MAINNET_PROPOSED_ROLES.producer, demoId: MAINNET_PROPOSED_DEMO_ID }
-      const request = prepareMainnetRequest(step, terms, journal, ceiling, reviewFacts.priorityFeePerGas)
+      const request = prepareMainnetRequest(step, terms, journal, ceiling, mainnetRequestedPriorityFee(reviewFacts.priorityFeePerGas))
       const aggregateMaximum = mainnetMaximumExposure(reviewFacts.ceilings)
       if (aggregateMaximum === null) throw new Error('Aggregate spending ceiling is missing')
       const body = { step, terms, facts: reviewFacts, request, nonce: reviewFacts.latestNonce, aggregateMaximum }
@@ -256,13 +259,14 @@ function App() {
       <div className="mt-3 flex flex-wrap gap-2">{steps.map((item) => <button key={item} className="rounded-xl border px-3 py-2 text-xs" aria-pressed={item === step} onClick={() => { setSubmissionReview(null); setStep(item) }}>{item}</button>)}</div>
       <p className="mono mt-3 break-all text-xs">To {review.to ?? 'contract creation'} · value {review.value.toString()} · data SHA-256 {review.dataSha256 ?? 'UNSET'}</p>
       <p className="mono mt-1 break-all text-xs">{step === 'deploy' ? `Frozen creation-bytecode SHA-256 ${GRANT_CREATION_SHA256}` : `Exact calldata ${review.data ?? 'UNSET'}`}</p>
-      <p className="mt-2 text-xs">Live gas estimate {estimatedGas?.toString() ?? 'UNAVAILABLE'} · fee quote {facts.quotedMaxFeePerGas?.toString() ?? 'UNAVAILABLE'} wei/gas. Proposed limits: deploy 510000, approve 71000, execute 205000 gas at 40 gwei; execution remains conditional on a post-deployment estimate. Funding route and transaction authorization: UNSET.</p>
+      <p className="mt-2 text-xs">Live gas estimate {estimatedGas?.toString() ?? 'UNAVAILABLE'} · base fee {facts.baseFeePerGas?.toString() ?? 'UNAVAILABLE'} wei/gas · priority-fee recommendation {facts.priorityFeePerGas?.toString() ?? 'UNAVAILABLE'} wei/gas · requested priority fee {facts.priorityFeePerGas === undefined || facts.priorityFeePerGas === null ? 'UNAVAILABLE' : mainnetRequestedPriorityFee(facts.priorityFeePerGas).toString()} wei/gas. Limits: deploy 510000, approve 71000, execute 205000 gas at 40 gwei max fee and {formatUnits(MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS, 9)} gwei priority fee. Each transaction requires separate owner authorization.</p>
       <p className="mt-1 text-xs">Current allowance {facts.allowance === undefined || facts.allowance === null ? 'UNVERIFIED' : formatUnits(facts.allowance, 6)} USDC · contract {reviewedContract ?? 'UNSET'}</p>
       {review.findings.map((finding) => <p key={finding} className="mt-1 text-xs" style={{ color: 'var(--danger)' }}>BLOCKED · {finding}</p>)}
       <button className="mt-3 rounded-xl border px-3 py-2 text-xs disabled:opacity-40" disabled={MAINNET_GRANT_WRITES_HARD_DISABLED || review.findings.length > 0} onClick={prepareSubmissionReview}>Prepare exact {step} wallet review</button>
       {submissionReview && <div className="mt-3 rounded-xl border p-3 text-xs">
         <p className="mono break-all">Exact {step}: from {submissionReview.request.from} · to {submissionReview.request.to ?? 'contract creation'} · nonce {submissionReview.nonce} · calldata hash {review.dataSha256}</p>
-        <p>Gas limit {submissionReview.request.gas.toString()} · max fee {submissionReview.request.maxFeePerGas.toString()} wei/gas · stage ceiling {formatUnits(submissionReview.request.gas * submissionReview.request.maxFeePerGas, 18)} USDC · aggregate ceiling {formatUnits(submissionReview.aggregateMaximum, 18)} USDC.</p>
+        <p>Gas limit {submissionReview.request.gas.toString()} · max fee {submissionReview.request.maxFeePerGas.toString()} wei/gas · priority fee {submissionReview.request.maxPriorityFeePerGas.toString()} wei/gas · stage ceiling {formatUnits(submissionReview.request.gas * submissionReview.request.maxFeePerGas, 18)} USDC · aggregate ceiling {formatUnits(submissionReview.aggregateMaximum, 18)} USDC.</p>
+        <p className="mt-2">Reject the MetaMask request if it changes the chain, account, nonce, value, destination, gas limit, 40-gwei max fee, or 6-gwei priority-fee ceiling. The app checks the submitted envelope afterward, but cannot undo a wallet-confirmed transaction.</p>
         <button className="mt-3 rounded-xl border px-3 py-2 disabled:opacity-40" disabled={MAINNET_GRANT_WRITES_HARD_DISABLED || submitting || chainId !== MAINNET_GRANT_CHAIN_ID || address?.toLowerCase() !== submissionReview.terms.payer.toLowerCase() || step !== submissionReview.step} onClick={() => void authorizeSubmission()}>Authorize exact {step} in MetaMask</button>
       </div>}
     </section>
@@ -270,7 +274,7 @@ function App() {
       <h2 className="font-semibold">Owner-controlled demo roles · not transaction authorization</h2>
       <p className="mt-2 text-xs">Payer wallet control: {address?.toLowerCase() === MAINNET_PROPOSED_ROLES.payer.toLowerCase() ? 'CONNECTED, NOT ATTESTED' : 'UNVERIFIED'} · both recipients: owner-reported demo accounts, not independently controlled or verified.</p>
       <p className="mt-1 text-xs">Exact owner-confirmed preparation terms: 0.10 + 0.20 USDC and the Mainnet demo ID above. Proposed conditional aggregate ceiling: 0.33144 USDC, including 0.30 USDC transfers; this is not approved spending.</p>
-      <p className="mt-1 text-xs">Decisions A and B2 record a limited owner risk exception, not an independent audit. This is a local activation candidate; publication, funding, deployment, approval and execution remain separate decisions.</p>
+      <p className="mt-1 text-xs">Decisions A and B2 record a limited owner risk exception, not an independent audit. This grant-only Mainnet application is published; funding, deployment, approval and execution each require separate authorization.</p>
     </section>
     {queryContract && !publicCandidate &&
       <p className="mt-5 text-xs">URL-supplied contract is not verified against frozen Mainnet runtime and terms; no payment is confirmed.</p>}
@@ -283,7 +287,7 @@ function App() {
         <h2 className="font-semibold">Mainnet evidence · UNCONFIRMED</h2>
         <p className="mt-2 text-xs">No reviewed Mainnet contract and runtime identity exists. A URL, wallet, or cached screenshot cannot establish a payment.</p>
       </section>}
-    <p className="mt-6 text-xs">UNKNOWN outcomes require reconciliation of the original hash and nonce. This local B2 artifact must not be published or connected to a signing wallet without separate authorization. No transaction is authorized by the owner risk exception.</p>
+    <p className="mt-6 text-xs">UNKNOWN outcomes require reconciliation of the original hash and nonce. No Mainnet contract deployment or payment has been verified here. Publication and the owner risk exception do not authorize a transaction.</p>
   </main>
 }
 

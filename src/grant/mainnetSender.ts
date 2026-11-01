@@ -3,6 +3,7 @@ import { grantSplitAbi, validateGrantSplitTerms, type GrantSplitTerms } from './
 import { matchesFrozenGrantRuntime } from './frozenGrantSplitArtifact'
 import { assessMainnetReview, MAINNET_GRANT_CHAIN_ID, MAINNET_GRANT_IDENTITY, MAINNET_GRANT_RELEASE,
   MAINNET_GRANT_TOTAL, MAINNET_GRANT_USDC, MAINNET_GRANT_WRITES_HARD_DISABLED, MAINNET_PROPOSED_ROLES,
+  MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS, mainnetRequestedPriorityFee,
   mainnetMaximumExposure, mainnetReviewBasisMatchesTerms, type MainnetCeiling, type MainnetReviewFacts, type MainnetStep } from './grantMainnetCandidate'
 import { beginMainnetAttempt, prepareMainnetRequest, readMainnetJournal, reconcileMainnetAttempt,
   transitionMainnetAttempt, type MainnetJournal, type MainnetPreparedRequest, type MainnetStorage,
@@ -64,7 +65,9 @@ export function verifyMainnetSubmittedEnvelope(transaction: Transaction | null, 
     findings.push('Submitted calldata, value or nonce changed')
   if (transaction.type !== 'eip1559' || transaction.gas > request.gas || transaction.maxFeePerGas == null ||
       transaction.maxFeePerGas > request.maxFeePerGas || transaction.maxPriorityFeePerGas == null ||
-      transaction.maxPriorityFeePerGas > request.maxPriorityFeePerGas)
+      transaction.maxPriorityFeePerGas > request.maxPriorityFeePerGas ||
+      transaction.maxPriorityFeePerGas > MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS ||
+      transaction.maxPriorityFeePerGas > transaction.maxFeePerGas)
     findings.push('Submitted gas type or fee exceeds the exact reviewed ceiling')
   return findings
 }
@@ -73,12 +76,12 @@ async function freshFacts(ports: MainnetSenderPorts, review: MainnetSubmissionRe
   const { client, wallet } = ports
   const { terms, step } = review
   if (wallet.providerId !== 'io.metamask') throw new Error('Selected provider is not EIP-6963 MetaMask')
-  const [chainId, walletChainId, accounts, decimals, tokenBalance, nativeBalance, latestNonce, pendingNonce, fee] = await Promise.all([
+  const [chainId, walletChainId, accounts, decimals, tokenBalance, nativeBalance, latestNonce, pendingNonce, fee, block] = await Promise.all([
     client.getChainId(), wallet.getChainId(), wallet.getAddresses(),
     client.readContract({ address: MAINNET_GRANT_USDC, abi: erc20Abi, functionName: 'decimals' }),
     client.readContract({ address: MAINNET_GRANT_USDC, abi: erc20Abi, functionName: 'balanceOf', args: [terms.payer] }),
     client.getBalance({ address: terms.payer }), client.getTransactionCount({ address: terms.payer, blockTag: 'latest' }),
-    client.getTransactionCount({ address: terms.payer, blockTag: 'pending' }), client.estimateFeesPerGas(),
+    client.getTransactionCount({ address: terms.payer, blockTag: 'pending' }), client.estimateFeesPerGas(), client.getBlock({ blockTag: 'latest' }),
   ])
   if (!same(accounts[0], terms.payer)) throw new Error('Active MetaMask account is not the reviewed payer')
   const contract = journal?.contract ?? null
@@ -120,7 +123,8 @@ async function freshFacts(ports: MainnetSenderPorts, review: MainnetSubmissionRe
       : await client.estimateContractGas({ address: contract!, abi: grantSplitAbi, functionName: 'execute', account: terms.payer })
   return { chainId, walletChainId, payer: accounts[0] ?? null, demoId: terms.demoId, tokenDecimals: decimals,
     tokenBalance, nativeBalance, allowance, latestNonce, pendingNonce, estimatedGas,
-    quotedMaxFeePerGas: fee.maxFeePerGas ?? null, priorityFeePerGas: fee.maxPriorityFeePerGas ?? null,
+    quotedMaxFeePerGas: fee.maxFeePerGas ?? null, baseFeePerGas: block.baseFeePerGas ?? null,
+    priorityFeePerGas: fee.maxPriorityFeePerGas ?? null,
     contract, runtimeCode, reviewedRuntimeHash: journal?.runtimeHash ?? null, contractTermsMatch, executed,
     priorAttemptUnresolved: !!journal?.[step], ceilings: review.facts.ceilings }
 }
@@ -139,7 +143,7 @@ export async function submitReviewedMainnetStep(ports: MainnetSenderPorts, revie
         review.aggregateMaximum !== mainnetMaximumExposure(facts.ceilings))
       throw new Error('Fresh transaction preflight differs from the owner-reviewed snapshot')
     const ceiling: MainnetCeiling = facts.ceilings[review.step]!
-    const request = prepareMainnetRequest(review.step, review.terms, prior, ceiling, facts.priorityFeePerGas!)
+    const request = prepareMainnetRequest(review.step, review.terms, prior, ceiling, mainnetRequestedPriorityFee(facts.priorityFeePerGas!))
     const { fingerprint: _fingerprint, ...reviewBody } = review
     if (canonical(request) !== canonical(review.request) ||
         mainnetReviewFingerprint({ ...reviewBody, request, facts }) !== review.fingerprint ||

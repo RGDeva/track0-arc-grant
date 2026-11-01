@@ -9,3 +9,5 @@ contracts/cache/
 .env.*
 .vercel/
 .arc-studio/
+DECISION_E_*.md
+GRANT_SUBMISSION_DRAFT_*.md

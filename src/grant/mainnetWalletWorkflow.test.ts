@@ -6,7 +6,7 @@ import { GRANT_RUNTIME_TEMPLATE } from './frozenGrantSplitArtifact'
 import { grantSplitAbi } from './grantSplitProtocol'
 import { MAINNET_GRANT_CHAIN_ID, MAINNET_GRANT_TOTAL, MAINNET_GRANT_USDC, MAINNET_PROPOSED_DEMO_ID,
   MAINNET_PROPOSED_ROLES } from './grantMainnetCandidate'
-import { assertMainnetSubmissionDisabled, beginMainnetAttempt, prepareMainnetRequest, readMainnetJournal,
+import { assertMainnetSubmissionDisabled, assertMainnetWalletRequest, beginMainnetAttempt, prepareMainnetRequest, readMainnetJournal,
   reconcileMainnetAttempt, saveMainnetJournal, transitionMainnetAttempt, validateMainnetTerms,
   type MainnetJournal, type MainnetStorage, type MainnetTerms } from './mainnetWalletWorkflow'
 
@@ -53,11 +53,22 @@ describe('fail-closed Mainnet wallet candidate', () => {
     expect(validateMainnetTerms({ ...terms, artist: terms.payer })).not.toEqual([])
     expect(() => prepareMainnetRequest('deploy', { ...terms, demoId: h('0') }, null, caps, 1n)).toThrow()
     expect(() => prepareMainnetRequest('deploy', terms, null, caps, caps.maxFeePerGas + 1n)).toThrow()
+    expect(() => prepareMainnetRequest('deploy', terms, null, caps, 6_000_000_001n)).toThrow()
+    expect(prepareMainnetRequest('deploy', terms, null, caps, 6_000_000_000n).maxPriorityFeePerGas).toBe(6_000_000_000n)
     expect(() => prepareMainnetRequest('approve', terms, null, caps, 1n)).toThrow()
     expect(() => prepareMainnetRequest('execute', terms, verified(), caps, 1n)).toThrow()
     expect(() => prepareMainnetRequest('deploy', terms, verified(), caps, 1n)).toThrow()
     expect(() => prepareMainnetRequest('execute', terms, { ...verified(), approve: { state: 'confirmed', hash: h('b'), at: 2, history: [] },
       execute: { state: 'unknown', at: 3, history: [] } }, caps, 1n)).toThrow()
+  })
+  it('rejects over-limit wallet envelopes before an injected-wallet call', () => {
+    const request = prepareMainnetRequest('deploy', terms, null, caps, 6_000_000_000n)
+    expect(() => assertMainnetWalletRequest(request)).not.toThrow()
+    for (const changed of [
+      { maxPriorityFeePerGas: 6_000_000_001n }, { maxPriorityFeePerGas: 41_000_000_000n },
+      { maxFeePerGas: 40_000_000_001n }, { gas: 510_001n }, { value: 1n }, { chainId: 5042002 },
+      { maxFeePerGas: 5_000_000_000n },
+    ]) expect(() => assertMainnetWalletRequest({ ...request, ...changed } as typeof request)).toThrow('exceeds reviewed')
   })
   it('persists UNKNOWN across refresh, rejects altered terms and never demotes CONFIRMED', () => {
     const db = storage()

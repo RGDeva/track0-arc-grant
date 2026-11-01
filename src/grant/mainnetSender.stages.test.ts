@@ -50,7 +50,7 @@ function fixture(step: 'approve' | 'execute') {
   const facts: MainnetReviewFacts = { chainId: 5042, walletChainId: 5042, payer: terms.payer, demoId: terms.demoId,
     tokenDecimals: 6, tokenBalance: 2_000_000n, nativeBalance: 2_000_000_000_000_000_000n,
     allowance, latestNonce: 1, pendingNonce: 1, estimatedGas: step === 'execute' ? 150_000n : 50_000n,
-    quotedMaxFeePerGas: 29_000_000_000n, priorityFeePerGas: 5_000_000_000n,
+    quotedMaxFeePerGas: 29_000_000_000n, baseFeePerGas: 20_000_000_000n, priorityFeePerGas: 5_000_000_000n,
     contract, runtimeCode: GRANT_RUNTIME_TEMPLATE, reviewedRuntimeHash: journal.runtimeHash!,
     contractTermsMatch: true, executed: false, priorAttemptUnresolved: false,
     ceilings: MAINNET_GRANT_RELEASE.ceilings }
@@ -63,6 +63,7 @@ function fixture(step: 'approve' | 'execute') {
     getTransactionCount: async () => 1,
     getTransaction: async () => null,
     estimateFeesPerGas: async () => ({ maxFeePerGas: 29_000_000_000n, maxPriorityFeePerGas: 5_000_000_000n }),
+    getBlock: async () => ({ baseFeePerGas: 20_000_000_000n }),
     estimateContractGas: async () => facts.estimatedGas,
     getBytecode: async () => GRANT_RUNTIME_TEMPLATE,
     readContract: async ({ functionName }: { functionName: string }) => functionName === 'decimals' ? 6 :

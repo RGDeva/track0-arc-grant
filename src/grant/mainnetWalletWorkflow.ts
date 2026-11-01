@@ -6,6 +6,7 @@ import { grantSplitAbi, validateGrantSplitTerms, type GrantSplitTerms } from './
 import { matchesFrozenGrantRuntime } from './frozenGrantSplitArtifact'
 import { mainnetCalldata, mainnetDeploymentData, mainnetReviewKey, MAINNET_GRANT_AMOUNTS,
   MAINNET_GRANT_CHAIN_ID, MAINNET_GRANT_TOTAL, MAINNET_GRANT_USDC, MAINNET_GRANT_WRITES_HARD_DISABLED,
+  MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS,
   type MainnetCeiling, type MainnetStep } from './grantMainnetCandidate'
 
 /** This module prepares and reconciles Mainnet transactions. It does not send them. */
@@ -42,7 +43,8 @@ export function prepareMainnetRequest(step: MainnetStep, terms: MainnetTerms, jo
   ceiling: MainnetCeiling, maxPriorityFeePerGas: bigint): MainnetPreparedRequest {
   const failures = validateMainnetTerms(terms)
   if (failures.length) throw new Error(failures.join('; '))
-  if (ceiling.gasLimit <= 0n || ceiling.maxFeePerGas <= 0n || maxPriorityFeePerGas <= 0n || maxPriorityFeePerGas > ceiling.maxFeePerGas)
+  if (ceiling.gasLimit <= 0n || ceiling.maxFeePerGas <= 0n || maxPriorityFeePerGas < 0n ||
+      maxPriorityFeePerGas > MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS || maxPriorityFeePerGas > ceiling.maxFeePerGas)
     throw new Error('Reviewed positive gas and EIP-1559 fee ceilings required')
   if (step === 'deploy' && (journal?.deploy || journal?.contract)) throw new Error('Deployment identity or attempt exists; no repeat deployment')
   if (step !== 'deploy' && (!journal || !journal.contract || !journal.runtimeHash || journal.deploy?.state !== 'confirmed' ||
@@ -59,6 +61,17 @@ export function prepareMainnetRequest(step: MainnetStep, terms: MainnetTerms, jo
   if (!data) throw new Error('Exact transaction calldata unavailable')
   return { from: terms.payer, chainId: MAINNET_GRANT_CHAIN_ID, to: step === 'deploy' ? undefined : step === 'approve' ? MAINNET_GRANT_USDC : contract!,
     data, value: 0n, gas: ceiling.gasLimit, maxFeePerGas: ceiling.maxFeePerGas, maxPriorityFeePerGas, type: 'eip1559' }
+}
+
+/** Final grant-only envelope guard immediately before calling the injected wallet. */
+export function assertMainnetWalletRequest(request: MainnetPreparedRequest): void {
+  const stageGasLimit = request.to === undefined ? 510_000n
+    : request.to.toLowerCase() === MAINNET_GRANT_USDC.toLowerCase() ? 71_000n : 205_000n
+  if (request.chainId !== MAINNET_GRANT_CHAIN_ID || request.gas <= 0n || request.gas > stageGasLimit ||
+      request.maxFeePerGas <= 0n || request.maxFeePerGas > 40_000_000_000n ||
+      request.maxPriorityFeePerGas < 0n || request.maxPriorityFeePerGas > MAINNET_GRANT_MAX_PRIORITY_FEE_PER_GAS ||
+      request.maxPriorityFeePerGas > request.maxFeePerGas || request.value !== 0n || request.type !== 'eip1559')
+    throw new Error('Wallet request exceeds reviewed Mainnet grant limits')
 }
 
 /** Source edit and independent approval are required before a sender can even be wired here. */
